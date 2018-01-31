@@ -1,4 +1,11 @@
 {-# LANGUAGE NamedFieldPuns, DeriveGeneric, DeriveAnyClass #-}
+module Life
+    ( loop
+    , init
+    ) where
+
+import Prelude hiding (init)
+
 import GHC.Generics
 import qualified Data.HashMap.Strict as HM
 import Control.Concurrent (threadDelay)
@@ -92,11 +99,8 @@ view Model{generation, life} =
             <$> [0..maxX - 1])
             ++ "\n"
 
-
+loop :: Model -> IO Model
 loop model = do
         putStr (view model)
         threadDelay 100
         loop (tick model)
-
-main :: IO ()
-main = loop Main.init

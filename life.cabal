@@ -1,0 +1,23 @@
+name:                life
+version:             0.1.0.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/proaralyst/life#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Tom Johnson
+maintainer:          public@tomjohnson.me.uk
+copyright:           Tom Johnson
+category:            Toys
+build-type:          Simple
+cabal-version:       >=1.10
+extra-source-files:  README.md
+
+executable life
+  hs-source-dirs:      src
+  main-is:             Main.hs
+  default-language:    Haskell2010
+  build-depends:       base >= 4.7 && < 5,
+                       unordered-containers == 0.2.8.0, 
+                       hashable == 1.2.6.1
+  other-modules:       Life 
