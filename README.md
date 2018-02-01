@@ -1,5 +1,5 @@
 # life
-Playing with simulations on a grid. The aim is to start of small & build
+Playing with simulations on a grid. The aim is to start off small & build
 complexity.
 
 ## Todo
