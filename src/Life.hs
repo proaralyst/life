@@ -1,4 +1,4 @@
-{-# LANGUAGE NamedFieldPuns, DeriveGeneric, DeriveAnyClass #-}
+{-# LANGUAGE TemplateHaskell, DeriveGeneric, DeriveAnyClass #-}
 module Life
     ( loop
     , init
@@ -19,19 +19,24 @@ import Data.Hashable (Hashable)
 import Data.Maybe (fromMaybe)
 import System.Console.ANSI (clearScreen)
 import Text.Printf (printf)
+import Control.Lens
 
 data Coord =
     Coord
-    { x :: !Int
-    , y :: !Int
+    { _x :: !Int
+    , _y :: !Int
     } deriving (Show, Eq, Ord, Generic, Hashable)
+
+makeLenses ''Coord
 
 data Model =
     Model
-    { generation :: !Int
-    , life :: HM.HashMap Coord Bool
-    , lastInput :: Char
+    { _generation :: !Int
+    , _life :: HM.HashMap Coord Bool
+    , _lastInput :: Char
     } deriving (Show)
+
+makeLenses ''Model
 
 maxY = 25
 maxX = 80
@@ -67,11 +72,11 @@ init = Model 0 life 'x'
         foldl' (\ acc coord -> HM.insert coord True acc) dead coords
 
 neighboursOf :: Coord -> [Coord]
-neighboursOf Coord{x, y} =
+neighboursOf coord =
   [ Coord (x' `mod` maxX) (y' `mod` maxY)
-  | x' <- (+x) <$> [-1..1]
-  , y' <- (+y) <$> [-1..1]
-  , x /= x' || y /= y'
+  | x' <- (+coord^.x) <$> [-1..1]
+  , y' <- (+coord^.y) <$> [-1..1]
+  , coord^.x /= x' || coord^.y /= y'
   ]
 
 
@@ -84,31 +89,31 @@ updateCell False 3 = True
 updateCell False _ = False
 
 tick :: Maybe Char -> Model -> Model
-tick input Model{generation, life, lastInput} =
-    Model (generation + 1) life' (fromMaybe lastInput input)
+tick input model =
+    Model (model^.generation + 1) life' (fromMaybe (model^.lastInput) input)
   where
-    life' = (`HM.mapWithKey` life) (\ key value ->
-        let neighbours = (`HM.lookup` life) <$> neighboursOf key in
+    life' = (`HM.mapWithKey` (model^.life)) (\ key value ->
+        let neighbours = (`HM.lookup` (model^.life)) <$> neighboursOf key in
         let toCount x = if x then 1 else 0 in
         let alive = foldl' (+) 0 (toCount . fromMaybe False <$> neighbours) in
         updateCell value alive
         )
 
-view :: Model -> String
-view Model{generation, life, lastInput} =
-    board ++ printf "Generation %i\tLast input %c\n" generation lastInput
+render :: Model -> String
+render model =
+    board ++ printf "Generation %i\tLast input %c\n" (model^.generation) (model^.lastInput)
   where
     display True = '#'
     display False = ' '
     board = do
         y <- [0..maxY - 1]
-        (display . fromMaybe False . (`HM.lookup` life) . (`Coord` y)
+        (display . fromMaybe False . (`HM.lookup` (model^.life)) . (`Coord` y)
             <$> [0..maxX - 1])
             ++ "\n"
 
 
-runView :: Model -> IO ()
-runView model = clearScreen >> putStr (view model)
+runRender :: Model -> IO ()
+runRender model = clearScreen >> putStr (render model)
 
 newtype KeyChannel = KeyChannel {unKeyChannel :: MVar (Char, KeyChannel)}
 
@@ -127,8 +132,7 @@ tryReadKeyChannel channel = tryReadMVar (unKeyChannel channel)
 
 loop :: Model -> KeyChannel -> IO Model
 loop model keyChannel = do
-  clearScreen
-  putStr (view model)
+  runRender model
   threadDelay (1000 * 100)
   message <- tryReadKeyChannel keyChannel
   let (input, keyChannel') =

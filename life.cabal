@@ -20,5 +20,6 @@ executable life
   build-depends:       base >= 4.7 && < 5,
                        unordered-containers == 0.2.8.0, 
                        hashable == 1.2.6.1,
-                       ansi-terminal == 0.7.1.1
+                       ansi-terminal == 0.7.1.1,
+                       lens == 4.15.4
   other-modules:       Life 
