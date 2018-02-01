@@ -7,7 +7,7 @@ module Life
     , runKeyChannel
     ) where
 
-import Prelude hiding (init)
+import Prelude hiding (init, interact)
 
 import GHC.Generics
 import qualified Data.HashMap.Strict as HM
@@ -32,15 +32,19 @@ makeLenses ''Coord
 data Model =
     Model
     { _generation :: !Int
-    , _life :: HM.HashMap Coord Bool
-    , _lastInput :: Char
+    , _cells :: HM.HashMap Coord Bool
+    , _speed :: !Int
     } deriving (Show)
 
 makeLenses ''Model
 
+data Interact next =
+    Tick next
+  | IncreaseSpeed next
+  | DecreaseSpeed next
+
 maxY = 25
 maxX = 80
-
 
 {-
   01234567
@@ -52,7 +56,7 @@ maxX = 80
 -}
 
 init :: Model
-init = Model 0 life 'x'
+init = Model 0 cells 1
   where
     dead = HM.fromList $ do
         x <- [0..maxX - 1]
@@ -68,7 +72,7 @@ init = Model 0 life 'x'
         , (5, 3)
         , (5, 4)
         ]
-    life =
+    cells =
         foldl' (\ acc coord -> HM.insert coord True acc) dead coords
 
 neighboursOf :: Coord -> [Coord]
@@ -79,7 +83,6 @@ neighboursOf coord =
   , coord^.x /= x' || coord^.y /= y'
   ]
 
-
 updateCell :: Bool -> Int -> Bool
 updateCell True x
     | x < 2 = False
@@ -88,26 +91,29 @@ updateCell True x
 updateCell False 3 = True
 updateCell False _ = False
 
-tick :: Maybe Char -> Model -> Model
-tick input model =
-    Model (model^.generation + 1) life' (fromMaybe (model^.lastInput) input)
+interact :: Interact Model -> Model
+interact (IncreaseSpeed model) = speed %~ (+1) $ model
+interact (DecreaseSpeed model) = speed %~ (max 0 . (+ (-1))) $ model
+interact (Tick model) =
+  cells %~ nTicks (model^.speed) $ (generation %~ (+ (model^.speed)) $ model)
   where
-    life' = (`HM.mapWithKey` (model^.life)) (\ key value ->
-        let neighbours = (`HM.lookup` (model^.life)) <$> neighboursOf key in
+    oneTick cells = (`HM.mapWithKey` cells) (\ key value ->
+        let neighbours = (`HM.lookup` cells) <$> neighboursOf key in
         let toCount x = if x then 1 else 0 in
         let alive = foldl' (+) 0 (toCount . fromMaybe False <$> neighbours) in
         updateCell value alive
         )
+    nTicks n cells = iterate oneTick cells !! n
 
 render :: Model -> String
 render model =
-    board ++ printf "Generation %i\tLast input %c\n" (model^.generation) (model^.lastInput)
+    board ++ printf "Generation %i\tSpeed: %i\n" (model^.generation) (model^.speed)
   where
     display True = '#'
     display False = ' '
     board = do
         y <- [0..maxY - 1]
-        (display . fromMaybe False . (`HM.lookup` (model^.life)) . (`Coord` y)
+        (display . fromMaybe False . (`HM.lookup` (model^.cells)) . (`Coord` y)
             <$> [0..maxX - 1])
             ++ "\n"
 
@@ -130,6 +136,13 @@ runKeyChannel channel = do
 tryReadKeyChannel :: KeyChannel -> IO (Maybe (Char, KeyChannel))
 tryReadKeyChannel channel = tryReadMVar (unKeyChannel channel)
 
+keymap :: Model -> Char -> Maybe (Interact Model)
+keymap model char = (keymap' char) <*> pure model
+  where
+    keymap' '>' = Just IncreaseSpeed
+    keymap' '<' = Just DecreaseSpeed
+    keymap' _   = Nothing
+
 loop :: Model -> KeyChannel -> IO Model
 loop model keyChannel = do
   runRender model
@@ -137,4 +150,4 @@ loop model keyChannel = do
   message <- tryReadKeyChannel keyChannel
   let (input, keyChannel') =
         (fst <$> message, maybe keyChannel snd message)
-  loop (tick input model) keyChannel'
+  loop (interact . Tick $ maybe model interact $ input >>= keymap model) keyChannel'
