@@ -21,5 +21,6 @@ executable life
                        unordered-containers == 0.2.8.0, 
                        hashable == 1.2.6.1,
                        ansi-terminal == 0.7.1.1,
-                       lens == 4.15.4
+                       lens == 4.15.4,
+                       stm == 2.4.4.1
   other-modules:       Life 

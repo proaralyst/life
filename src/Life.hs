@@ -1,23 +1,20 @@
 {-# LANGUAGE TemplateHaskell, DeriveGeneric, DeriveAnyClass #-}
 module Life
-    ( loop
+    ( Model(..)
+    , Interact(..)
     , init
-    , KeyChannel(..)
-    , newKeyChannel
-    , runKeyChannel
+    , render
+    , keymap
+    , interact
     ) where
 
 import Prelude hiding (init, interact)
 
 import GHC.Generics
 import qualified Data.HashMap.Strict as HM
-import Control.Concurrent (threadDelay, forkIO, yield)
-import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, tryReadMVar)
-import Control.Monad (forever)
 import Data.Foldable (foldl')
 import Data.Hashable (Hashable)
 import Data.Maybe (fromMaybe)
-import System.Console.ANSI (clearScreen)
 import Text.Printf (printf)
 import Control.Lens
 
@@ -117,37 +114,9 @@ render model =
             <$> [0..maxX - 1])
             ++ "\n"
 
-
-runRender :: Model -> IO ()
-runRender model = clearScreen >> putStr (render model)
-
-newtype KeyChannel = KeyChannel {unKeyChannel :: MVar (Char, KeyChannel)}
-
-newKeyChannel :: IO KeyChannel
-newKeyChannel = KeyChannel <$> newEmptyMVar
-
-runKeyChannel :: KeyChannel -> IO ()
-runKeyChannel channel = do
-  char <- getChar
-  channel' <- newKeyChannel
-  forkIO $ putMVar (unKeyChannel channel) (char, channel')
-  runKeyChannel channel'
-
-tryReadKeyChannel :: KeyChannel -> IO (Maybe (Char, KeyChannel))
-tryReadKeyChannel channel = tryReadMVar (unKeyChannel channel)
-
 keymap :: Model -> Char -> Maybe (Interact Model)
-keymap model char = (keymap' char) <*> pure model
+keymap model char = keymap' char <*> pure model
   where
     keymap' '>' = Just IncreaseSpeed
     keymap' '<' = Just DecreaseSpeed
     keymap' _   = Nothing
-
-loop :: Model -> KeyChannel -> IO Model
-loop model keyChannel = do
-  runRender model
-  threadDelay (1000 * 100)
-  message <- tryReadKeyChannel keyChannel
-  let (input, keyChannel') =
-        (fst <$> message, maybe keyChannel snd message)
-  loop (interact . Tick $ maybe model interact $ input >>= keymap model) keyChannel'
