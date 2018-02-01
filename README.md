@@ -12,3 +12,7 @@ complexity.
 * Fettle the Life component
 
 * Add a cursor, a pause shortcut & the ability to flip a cell's state
+
+* Use the alternative buffer so I'm not losing scrollback
+
+* Incremental update of the terminal
