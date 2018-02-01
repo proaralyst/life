@@ -19,5 +19,6 @@ executable life
   default-language:    Haskell2010
   build-depends:       base >= 4.7 && < 5,
                        unordered-containers == 0.2.8.0, 
-                       hashable == 1.2.6.1
+                       hashable == 1.2.6.1,
+                       ansi-terminal == 0.7.1.1
   other-modules:       Life 

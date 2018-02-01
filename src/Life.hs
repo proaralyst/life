@@ -2,29 +2,35 @@
 module Life
     ( loop
     , init
+    , KeyChannel(..)
+    , newKeyChannel
+    , runKeyChannel
     ) where
 
 import Prelude hiding (init)
 
 import GHC.Generics
 import qualified Data.HashMap.Strict as HM
-import Control.Concurrent (threadDelay)
+import Control.Concurrent (threadDelay, forkIO, yield)
+import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, tryReadMVar)
 import Control.Monad (forever)
 import Data.Foldable (foldl')
 import Data.Hashable (Hashable)
 import Data.Maybe (fromMaybe)
+import System.Console.ANSI (clearScreen)
 import Text.Printf (printf)
 
 data Coord =
     Coord
-    { x :: Int
-    , y :: Int
+    { x :: !Int
+    , y :: !Int
     } deriving (Show, Eq, Ord, Generic, Hashable)
 
 data Model =
     Model
-    { generation :: Int
+    { generation :: !Int
     , life :: HM.HashMap Coord Bool
+    , lastInput :: Char
     } deriving (Show)
 
 maxY = 25
@@ -41,7 +47,7 @@ maxX = 80
 -}
 
 init :: Model
-init = Model 0 life
+init = Model 0 life 'x'
   where
     dead = HM.fromList $ do
         x <- [0..maxX - 1]
@@ -77,8 +83,9 @@ updateCell True x
 updateCell False 3 = True
 updateCell False _ = False
 
-tick :: Model -> Model
-tick Model{generation, life} = Model {generation = generation + 1, life = life'}
+tick :: Maybe Char -> Model -> Model
+tick input Model{generation, life, lastInput} =
+    Model (generation + 1) life' (fromMaybe lastInput input)
   where
     life' = (`HM.mapWithKey` life) (\ key value ->
         let neighbours = (`HM.lookup` life) <$> neighboursOf key in
@@ -88,8 +95,8 @@ tick Model{generation, life} = Model {generation = generation + 1, life = life'}
         )
 
 view :: Model -> String
-view Model{generation, life} =
-    board ++ printf "Generation %i\n" generation
+view Model{generation, life, lastInput} =
+    board ++ printf "Generation %i\tLast input %c\n" generation lastInput
   where
     display True = '#'
     display False = ' '
@@ -99,8 +106,31 @@ view Model{generation, life} =
             <$> [0..maxX - 1])
             ++ "\n"
 
-loop :: Model -> IO Model
-loop model = do
-        putStr (view model)
-        threadDelay 100
-        loop (tick model)
+
+runView :: Model -> IO ()
+runView model = clearScreen >> putStr (view model)
+
+newtype KeyChannel = KeyChannel {unKeyChannel :: MVar (Char, KeyChannel)}
+
+newKeyChannel :: IO KeyChannel
+newKeyChannel = KeyChannel <$> newEmptyMVar
+
+runKeyChannel :: KeyChannel -> IO ()
+runKeyChannel channel = do
+  char <- getChar
+  channel' <- newKeyChannel
+  forkIO $ putMVar (unKeyChannel channel) (char, channel')
+  runKeyChannel channel'
+
+tryReadKeyChannel :: KeyChannel -> IO (Maybe (Char, KeyChannel))
+tryReadKeyChannel channel = tryReadMVar (unKeyChannel channel)
+
+loop :: Model -> KeyChannel -> IO Model
+loop model keyChannel = do
+  clearScreen
+  putStr (view model)
+  threadDelay (1000 * 100)
+  message <- tryReadKeyChannel keyChannel
+  let (input, keyChannel') =
+        (fst <$> message, maybe keyChannel snd message)
+  loop (tick input model) keyChannel'
